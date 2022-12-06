@@ -4,13 +4,12 @@ import com.example.salaryfinder.domain.CustomSortOrder;
 import com.example.salaryfinder.domain.User;
 import com.example.salaryfinder.helper.OffsetLimitPageRequest;
 import com.example.salaryfinder.repo.UserRepository;
-import com.opencsv.bean.CsvToBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class UserServiceImpl implements UserService {
