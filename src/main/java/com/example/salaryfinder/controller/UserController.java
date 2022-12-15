@@ -19,11 +19,17 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @RestController
 public class UserController {
     @Autowired
     private UserService userService;
+
+    private static final ExecutorService threadPool = Executors.newFixedThreadPool(10);
 
     @GetMapping(path = "/users")
     public ResponseEntity<?> getUsers(
@@ -49,23 +55,33 @@ public class UserController {
 
     @PostMapping(path = "/upload")
     public ResponseEntity<?> uploadFile(@RequestParam(name = "file") MultipartFile file) {
-        try (Reader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8)) {
-            userService.uploadData(
-                    new CsvToBeanBuilder<User>(reader)
-                            .withType(User.class)
-                            .build()
-                            .parse());
-            return ResponseEntity.ok().body(Map.of("success", 1));
-        } catch (IOException | RuntimeException e) {
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("success", 0);
-            jsonObject.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(jsonObject);
-        } catch (Exception e) {
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("success", 0);
-            jsonObject.put("error", e.getMessage());
-            return ResponseEntity.internalServerError().body(jsonObject);
+        Future<ResponseEntity> future = threadPool.submit(() -> {
+            try (Reader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8)) {
+                userService.uploadData(
+                        new CsvToBeanBuilder<User>(reader)
+                                .withType(User.class)
+                                .build()
+                                .parse());
+                return ResponseEntity.ok().body(Map.of("success", 1));
+            } catch (IOException | RuntimeException e) {
+                return ResponseEntity.badRequest().body(getErrorJsonObject(e));
+            } catch (Exception e) {
+                return ResponseEntity.internalServerError().body(getErrorJsonObject(e));
+            }
+        });
+        try {
+            return future.get();
+        } catch (InterruptedException e) {
+            return ResponseEntity.internalServerError().body(getErrorJsonObject(e));
+        } catch (ExecutionException e) {
+            return ResponseEntity.internalServerError().body(getErrorJsonObject(e));
         }
+    }
+
+    private JSONObject getErrorJsonObject(Exception e) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("success", 0);
+        jsonObject.put("error", e.getMessage());
+        return jsonObject;
     }
 }
